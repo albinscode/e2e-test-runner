@@ -1,9 +1,14 @@
 import {Given, Then} from "@badeball/cypress-cucumber-preprocessor";
 import {render} from "./utils";
 
+afterEach(() => {
+    cy.task('clearUrlOrigin');
+});
+
 Given('I visit the {string}', (templatedUrl) => {
     cy.getContext().then((context) => {
         const url = render(templatedUrl, context);
+        cy.task('setUrlOrigin', {url});
 
         return cy.visit(url);
     });
@@ -64,3 +69,12 @@ Then('I expect current url matches {string}', (templatedExpectedUrl) => {
         cy.url().should('match', new RegExp(expectedUrl));
     });
 });
+
+Then('I set origin url as {string}', (templatedUrl) => {
+    cy.getContext().then((context) => {
+        const url = render(templatedUrl, context);
+        return cy.task('setUrlOrigin', {url});
+    });
+});
+
+

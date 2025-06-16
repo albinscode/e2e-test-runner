@@ -38,6 +38,7 @@ module.exports = defineConfig({
             let dbClient;
             let dbResults = [];
             let dbLastQuery = null;
+            let urlOrigin;
 
             on('task', {
                 log(message) {
@@ -290,6 +291,17 @@ module.exports = defineConfig({
                     return null;
                 },
 
+                setUrlOrigin({url}) {
+                    urlOrigin = url;
+                    return null;
+                },
+                clearUrlOrigin() {
+                    urlOrigin = '';
+                    return null;
+                },
+                getUrlOrigin() {
+                    return urlOrigin;
+                }
             });
 
             return config;
