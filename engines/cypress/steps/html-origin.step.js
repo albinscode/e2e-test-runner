@@ -33,3 +33,14 @@ Then('I set the text {string} in the HTML element {string} with origin url {stri
         });
     });
 });
+
+Then('I expect the HTML element {string} contains {string} with origin url {string}', (templatedSelector, templatedValue, templatedUrlOrigin) => {
+    cy.getContext().then((context) => {
+        const selector = render(templatedSelector, context);
+        const urlOrigin = render(templatedUrlOrigin, context);
+        const value = render(templatedValue, context);
+        return cy.origin(urlOrigin, { args: { selector, value } }, ({selector, value}) => {
+            cy.get(selector).contains(value);
+        });
+    });
+});
