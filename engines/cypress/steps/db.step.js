@@ -62,3 +62,44 @@ Then("I expect {int} database results", expected => {
         expect(rows.length).to.equal(expected);
     });
 });
+
+// Table helpers (from feature/url-origin)
+
+Given("I setup database with connection string {string}", (templatedConnectionString) => {
+      return cy.getContext().then(ctx => {
+          const connectionString = render(templatedConnectionString, ctx);
+          return cy.task("initDb", { connectionString });
+      });
+  }
+);
+
+When("I search db table {string} with filter {string} and columns {string}", (templatedTable, templatedFilter, templatedColumns) => {
+    return cy.getContext().then(ctx => {
+        const table = render(templatedTable, ctx);
+        const filter = render(templatedFilter, ctx);
+        const columns = render(templatedColumns, ctx);
+        return cy.task("runDbSearch", { table, filter, columns });
+    });
+  }
+);
+
+When('I add a row to table {string} with values:',
+    (templatedTableName, rowJson) => {
+        return cy.getContext().then(context => {
+            const tableName   = render(templatedTableName, context);
+            const rowData     = JSON.parse(rowJson);
+
+            return cy.task('addTableRow', { tableName, rowData });
+        });
+    }
+);
+
+Then("I expect {int} db results", expected => {
+    return cy.task("getDbResults").then(rows => {
+        expect(rows.length).to.equal(expected);
+    });
+});
+
+Then("I delete all db results", () => {
+    return cy.task("deleteDbResults");
+});
