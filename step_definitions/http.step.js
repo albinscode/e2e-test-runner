@@ -62,3 +62,26 @@ Given('I set http header {string} with {string}', (key, templatedValue) => {
         return cy.setContext({httpHeaders});
     });
 })
+
+Then('I decode JWT token {string} and store it as JSON {string} in context', (templatedEncodedJwt, decodedJwt) => {
+
+    cy.getContext().then((context) => {
+        const encodedJwt = nunjucks.renderString(templatedEncodedJwt, context);
+
+        // Decode JWT
+        const base64Url = encodedJwt.split('.')[1];
+        const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+        const jsonPayload = decodeURIComponent(
+            atob(base64)
+              .split('')
+              .map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+              .join('')
+        );
+        const {ctx} = context;
+
+        ctx[decodedJwt] = JSON.parse(jsonPayload);
+
+        return cy.setContext({ctx});
+    })
+
+});
