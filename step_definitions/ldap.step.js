@@ -58,4 +58,22 @@ Then('I delete all ldap results', () => {
     });
 });
 
+Then('I store ldap results as {string} in context', (key) => {
+
+    cy.task('getLdapResults').then((results) => {
+        return cy.getContext().then((context) => {
+            return {
+              context,
+              results,
+            }
+        });
+
+    })
+    .then((contextAndResults) => {
+        const {ctx} = contextAndResults.context;
+        ctx[key] = contextAndResults.results;
+        return cy.setContext({ctx});
+    })
+});
+
 
