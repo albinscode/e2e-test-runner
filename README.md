@@ -9,6 +9,7 @@ applications.
 
 - 🧪 Predefined Cucumber steps for HTTP requests and assertions
 - 🧰 Built-in context system with template rendering (via Nunjucks)
+- 📦 PostgreSQL database testing with parameterized query support
 - ⚙️ Compatible with Cypress and Cucumber ecosystem
 - 🚀 Run tests via Node or Docker
 
@@ -1084,60 +1085,148 @@ Given I add a ldap entry with dn "uid=c1aa97e9-fdff-4b81-b468-0cb41be3e550,dc=co
 
 ### 📦 Database
 
-1. Setup db client with connection string
+**Important notes:**
+- Only PostgreSQL driver is currently supported
+- Supports both raw SQL and parameterized queries for SQL injection protection
+- All query results are stored in `ctx.dbResults` for assertions
+
+#### Setup Database Connection
+
+1. **Connect using connection string**
 
 ```gherkin
-Given I setup database with connection string "<connectionString>"
+Given I setup database with "<connectionString>"
 
 # Example:
-Given I setup database with connection string "postgres://user:password@localhost:5432/db"
+Given I setup database with "{{ env.DB_CONNECTION_STRING }}"
+Given I setup database with "postgres://user:password@localhost:5432/mydb"
 ```
 
-2. Setup db client with full connection details
+2. **Connect using individual parameters**
 
 ```gherkin
 Given I setup database with driver "<driver>" host "<host>" port <port> user "<user>" password "<password>" database "<database>"
+
 # Example:
-Given I setup database with driver "postgres" host "localhost" port 5432 user "user" password "password" database "db"
+Given I setup database with driver "postgres" host "localhost" port 5432 user "testuser" password "testpass" database "testdb"
 ```
 
-3. Search db results on table with filter and columns
+#### Execute SQL Queries
+
+3. **Execute raw SQL request**
 
 ```gherkin
-Given I search db table "<table>" with filter "<filter>" and columns "<columns>"
+When I execute sql request "<sql>"
 
-# Example:
-Given I search db table "users" with filter "name = 'doe' and surname = 'john'" and columns "id name surname"
+# Examples - SELECT:
+When I execute sql request "SELECT id, name, email FROM users WHERE age > 25"
+
+# Examples - INSERT:
+When I execute sql request "INSERT INTO users (name, email) VALUES ('John Doe', 'john@example.com')"
+
+# Examples - UPDATE:
+When I execute sql request "UPDATE users SET active = true WHERE email = 'john@example.com'"
+
+# Examples - DELETE:
+When I execute sql request "DELETE FROM users WHERE email = 'john@example.com'"
 ```
 
-3. Expect db search results to a given length
+4. **Execute parameterized SQL request (recommended for security)**
+
+Use PostgreSQL placeholders (`$1`, `$2`, etc.) to prevent SQL injection:
 
 ```gherkin
-Given I expect "<expectedLength>" db results
-# Example:
-Given I expect 2 db results
-```
-
-4. Delete all search results previously found
-
-```gherkin
-Given I delete all db results
-# Example:
-Given I delete all db results
-```
-
-5. Add a new ldap entry with dn and with raw attributes
-
-```gherkin
-Given I add a row to table "<table>" with values "<values>"
-# Example:
-Given I add a row to table "users" with values
+When I execute sql request "<sql>" with values:
 """
-{
-    "name": "Doe",
-    "surname": "John",
-}
+[value1, value2, ...]
 """
+
+# Example - SELECT with parameter:
+Given I store "userEmail" as "john@example.com" in context
+When I execute sql request "SELECT * FROM users WHERE email = $1" with values:
+"""
+["{{ ctx.userEmail }}"]
+"""
+
+# Example - INSERT with parameters:
+When I execute sql request "INSERT INTO users (name, age, email, active) VALUES ($1, $2, $3, $4)" with values:
+"""
+["John Doe", 30, "john@example.com", true]
+"""
+
+# Example - UPDATE with parameters:
+When I execute sql request "UPDATE users SET age = $1 WHERE email = $2" with values:
+"""
+[35, "john@example.com"]
+"""
+
+# Example - DELETE with parameters:
+When I execute sql request "DELETE FROM users WHERE email = $1" with values:
+"""
+["john@example.com"]
+"""
+
+# Example - Protection against SQL injection:
+Given I store "maliciousName" as "'; DROP TABLE users; --" in context
+When I execute sql request "INSERT INTO users (name) VALUES ($1)" with values:
+"""
+["{{ ctx.maliciousName }}"]
+"""
+# The malicious string is safely inserted as data, not executed as SQL!
+```
+
+#### Assert Query Results
+
+5. **Expect a specific number of database results**
+
+```gherkin
+Then I expect <count> database results
+
+# Example:
+Then I expect 5 database results
+```
+
+6. **Access results in context for assertions**
+
+After executing a query, results are available in `ctx.dbResults`:
+
+```gherkin
+When I execute sql request "SELECT id, name, email FROM users WHERE email = $1" with values:
+"""
+["john@example.com"]
+"""
+Then I expect 1 database results
+And I expect "{{ ctx.dbResults[0].name }}" is "John Doe"
+And I expect "{{ ctx.dbResults[0].email }}" is "john@example.com"
+```
+
+#### Tips
+
+💡 **Use parameterized queries when:**
+- Values come from variables/context
+- String values contain special characters (quotes, apostrophes)
+- Security is a concern (prevents SQL injection)
+
+💡 **Use raw SQL when:**
+- Query is completely static with no variables
+- Maximum readability is more important
+
+💡 **Clean up test data:**
+Use Background sections to delete test data before each scenario:
+
+```gherkin
+Feature: User Management
+
+  Background:
+    Given I setup database with "{{ env.DB_CONNECTION_STRING }}"
+    When I execute sql request "DELETE FROM users WHERE email LIKE '%@test.com'"
+
+  Scenario: Create new user
+    When I execute sql request "INSERT INTO users (name, email) VALUES ($1, $2)" with values:
+    """
+    ["Test User", "test@test.com"]
+    """
+    Then I expect 1 database results
 ```
 
 ---
@@ -1265,6 +1354,16 @@ Then I expect a message on Kafka topic "<topic>" contains:
 """
 Then I expect a message on Kafka topic "<topic>" matches regex "<regex>"
 Then I log kafka messages
+
+# 📦 Database (PostgreSQL)
+Given I setup database with "<connectionString>"
+Given I setup database with driver "<driver>" host "<host>" port <port> user "<user>" password "<password>" database "<database>"
+When I execute sql request "<sql>"
+When I execute sql request "<sql>" with values:
+"""
+[value1, value2, ...]
+"""
+Then I expect <count> database results
 ```
 
 ## 🚧 Missing a Step?

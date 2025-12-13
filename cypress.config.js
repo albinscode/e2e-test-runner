@@ -18,7 +18,7 @@ const absolutePath = path.resolve(process.env.CYPRESS_FEATURES_PATH);
 module.exports = defineConfig({
     e2e: {
         env: process.env,
-        specPattern: `${absolutePath}/**/secu*.feature`,
+        specPattern: `${absolutePath}/**/*.feature`,
         supportFile: 'support/e2e.js',
         reporter: require.resolve('@badeball/cypress-cucumber-preprocessor/pretty-reporter'),
         async setupNodeEvents(on, config) {
@@ -182,7 +182,7 @@ module.exports = defineConfig({
                         : { user, password, host, port, database };
 
                     // we currenly only manage postgres driver
-                    if (cfg.driver === 'postgres' || cfg.connectionString.indexOf('postgres') === 0) {
+                    if (driver === 'postgres' || (connectionString && connectionString.indexOf('postgres') === 0)) {
                         dbClient = new PgClient(cfg);
                         dbClient.connect();
                     }
@@ -193,87 +193,29 @@ module.exports = defineConfig({
                 },
 
                 /**
-                 * table:   string   (e.g. "users")
-                 * filter:  string   (SQL WHERE clause without the word WHERE, e.g. "age > 30 AND name ILIKE '%john%'")
-                 * columns: string   (space separated list, e.g. "id name email")
+                 * sqlRequest:   string  the whole sql request with optional $1, $2, etc. placeholders
+                 * values:       array   (optional) values to bind to placeholders
+                 *
+                 * Examples:
+                 * - Raw SQL: { sqlRequest: "SELECT * FROM users" }
+                 * - Parameterized: { sqlRequest: "INSERT INTO users (name, age) VALUES ($1, $2)", values: ["John", 30] }
                  */
-                runDbSearch({ table, filter, columns }) {
-                    const cols = columns.split(/\s+/).join(', ');
-                    const sql = `SELECT ${cols} FROM ${table}` + (filter ? ` WHERE ${filter}` : '');
-
-                    dbLastQuery = sql;
+                runDbRequest({ sqlRequest, values }) {
+                    dbLastQuery = sqlRequest;
                     return dbClient
-                        .query(sql)
+                        .query(sqlRequest, values)
                         .then(res => {
-                            dbResults = res.rows;
+                            dbResults = res.rows || [];
                             return null;
                         })
                         .catch(err => {
-                            console.error('Db search error:', err);
+                            console.error('Db query error:', err);
                             throw err;
                         });
                 },
 
                 getDbResults() {
                     return dbResults;
-                },
-
-                deleteDbResults() {
-                    // nothing to delete
-                    if (!dbLastQuery) return null;
-
-                    // reuse the same WHERE clause we used for the SELECT.
-                    const whereClause = dbLastQuery.split('WHERE')[1];
-                    // no WHERE, nothing to delete
-                    if (!whereClause) return null;
-
-                    const deleteSql = `DELETE FROM ${dbLastQuery
-                        .match(/^SELECT\s+.+?\s+FROM\s+(\S+)/i)[1]} WHERE ${whereClause}`;
-
-                    return dbClient
-                        .query(deleteSql)
-                        .then(() => {
-                            dbResults = [];
-                            dbLastQuery = null;
-                            return null;
-                        })
-                        .catch(err => {
-                            console.error('Db delete error:', err);
-                            throw err;
-                        });
-                },
-
-                addTableRow({ tableName, rowData }) {
-                    if (typeof tableName !== 'string' || !tableName.trim()) {
-                        throw new Error('addTableRow: `tableName` must be a non‑empty string');
-                    }
-                    if (typeof rowData !== 'object' || rowData === null) {
-                        throw new Error('addTableRow: `rowData` must be an object');
-                    }
-
-                    const columns = Object.keys(rowData);
-                    const values  = Object.values(rowData);
-
-                    // We must **quote** identifiers because table/column names may be camelCase or
-                    // reserved words. PostgreSQL double‑quotes are safe as long as we escape any
-                    // embedded double‑quote by doubling it.
-                    const quoteIdent = (ident) => `"${ident.replace(/"/g, '""')}"`;
-
-                    const columnList = columns.map(quoteIdent).join(', ');
-                    const placeholders = columns.map((_, i) => `$${i + 1}`).join(', ');
-
-                    const sql = `INSERT INTO ${quoteIdent(tableName)} (${columnList})
-                                 VALUES (${placeholders})
-                                 RETURNING *;`;
-
-                    return dbClient
-                        .query(sql, values)
-                        .then( () => { return null })
-                        .catch(err => {
-                            console.error('Db create error:', err);
-                            throw err;
-                        });
-
                 },
 
                 clearDb() {
