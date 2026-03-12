@@ -1013,6 +1013,166 @@ Then I expect a message on Kafka topic "orders" matches regex "^\\{.*\"status\":
 Then I log kafka messages
 ```
 
+15. Setup Kafka client with auto-detection of plain vs SASL/SSL mode
+
+This step replaces step 1 when your tests need to run against **different environments** (local plain
+broker and remote secured broker) using the **same feature file**.
+
+The connection mode is selected automatically based on the values of two parameters:
+
+| Condition | Mode selected |
+|---|---|
+| `oauthClientId` **and** `trustStorePath` are both non-empty | **SASL/SSL** — authenticates to the broker using an OIDC bearer token (client_credentials grant) over a TLS-secured connection |
+| Either parameter is empty | **Plain** — no authentication, no SSL (suitable for local development) |
+
+All parameters support Nunjucks templating (`{{ env.MY_VAR }}`).
+
+| Parameter | Description |
+|---|---|
+| `clientId` | Kafka client ID |
+| `broker` | Broker address as `"host:port"` |
+| `oauthClientId` | OIDC client ID for broker authentication (empty → plain mode) |
+| `oauthClientSecret` | OIDC client secret |
+| `oauthScope` | OIDC scope (e.g. `"openid"`) |
+| `oauthEndpoint` | OIDC token endpoint URL |
+| `trustStorePath` | Absolute local path to the P12 (PKCS12) truststore (empty → plain mode) |
+| `trustStorePassword` | Passphrase for the P12 truststore |
+
+```gherkin
+Given I setup kafka with clientId "<clientId>" and broker "<host:port>"
+  and oauthClientId "<oauthClientId>" and oauthClientSecret "<oauthClientSecret>"
+  and oauthScope "<scope>" and oauthEndpoint "<tokenUrl>"
+  and trustStorePath "<pathToP12>" and trustStorePassword "<password>"
+```
+
+**Example — plain mode (local, `.env-kafka-integration`):**
+
+The OAUTH and truststore variables are left empty, so the step connects without authentication.
+
+```gherkin
+Given I setup kafka with clientId "e2e-test" and broker "{{env.KAFKA_HOST}}:{{env.KAFKA_PORT}}"
+  and oauthClientId "{{env.KAFKA_OAUTH_CLIENT_ID}}" and oauthClientSecret "{{env.KAFKA_OAUTH_CLIENT_SECRET}}"
+  and oauthScope "{{env.KAFKA_OAUTH_SCOPE}}" and oauthEndpoint "{{env.KAFKA_OAUTH_CLIENT_ENDPOINT_URI}}"
+  and trustStorePath "{{env.KAFKA_SSL_TRUST_STORE_LOCATION}}" and trustStorePassword "{{env.KAFKA_SSL_TRUST_STORE_PASSWORD}}"
+```
+
+Corresponding `.env-kafka-integration` entries (empty → plain mode):
+
+```env
+KAFKA_HOST=kafka
+KAFKA_PORT=9092
+KAFKA_OAUTH_CLIENT_ID=
+KAFKA_OAUTH_CLIENT_SECRET=
+KAFKA_OAUTH_SCOPE=
+KAFKA_OAUTH_CLIENT_ENDPOINT_URI=
+KAFKA_SSL_TRUST_STORE_LOCATION=
+KAFKA_SSL_TRUST_STORE_PASSWORD=
+```
+
+**Example — SASL/SSL mode (qualification/recette, `.env-qual`):**
+
+When the OAUTH and truststore variables are populated, the step automatically switches to SASL/SSL.
+The feature file is **identical** — only the environment file changes.
+
+```env
+KAFKA_HOST=kafka-bootstrap-kube-qual.anah.fr
+KAFKA_PORT=30104
+KAFKA_GROUP_ID=kafka-ciam.group.qual
+KAFKA_OAUTH_CLIENT_ID=kafka-ciam-user-qual
+KAFKA_OAUTH_CLIENT_SECRET=<secret>
+KAFKA_OAUTH_SCOPE=openid
+KAFKA_OAUTH_CLIENT_ENDPOINT_URI=https://acces-qualif.anah.fr/oauth2/token
+KAFKA_SSL_TRUST_STORE_LOCATION=/path/to/client-truststore.p12
+KAFKA_SSL_TRUST_STORE_PASSWORD=<truststore-password>
+```
+
+> **Prerequisite for SASL/SSL:** the P12 truststore must be available locally before running the tests.
+> Extract it from the Kubernetes Kafka secret and set `KAFKA_SSL_TRUST_STORE_LOCATION` to its local path.
+
+> **Backward compatibility:** the simple two-parameter step (`clientId` + `broker`, step 1) is still
+> available for plain-mode-only scenarios.
+
+16. Enable Confluent wire format encoding
+
+Enable the [Confluent Schema Registry wire format](https://docs.confluent.io/platform/current/schema-registry/fundamentals/serdes-develop/index.html#wire-format)
+for all subsequent `send` and `receive` operations on the current Kafka instance.
+
+When enabled:
+- **Sent** messages are prefixed with a 5-byte header: magic byte `0x00` + 4-byte big-endian schema ID.
+- **Received** messages have the 5-byte header stripped automatically before being stored.
+
+```gherkin
+Given I enable Confluent wire format with schema id <schemaId>
+
+# Example:
+Given I enable Confluent wire format with schema id 1
+```
+
+> This step is reset automatically after each test (via `afterEach` → `clearKafka`).
+
+**About the schema ID**
+
+The schema ID is an integer assigned by the Confluent Schema Registry to a specific **version** of a
+schema (Avro, JSON Schema, or Protobuf). Consumers use it to look up the exact schema version from
+the registry and deserialise the payload correctly.
+
+**The payload does not need to be Avro.** This step only adds the Confluent wire format envelope
+(the 5-byte header). The message body remains plain JSON. The schema ID tells downstream consumers
+which version of the event schema to expect — it acts as a contract version indicator, not a
+serialisation requirement.
+
+Concretely: `schema id 1` means schema version 1 is registered in the customer's Schema Registry.
+If the customer later registers a new schema version, the ID will increment (e.g. `2`, `3`, ...).
+
+**Full example — sending a JSON event to a remote SASL/SSL + Confluent Kafka broker:**
+
+```gherkin
+Feature: Kafka qual environment
+
+  Scenario: Send a user creation event to qualification Kafka
+    Given I setup kafka with clientId "e2e-test" and broker "{{env.KAFKA_HOST}}:{{env.KAFKA_PORT}}"
+      and oauthClientId "{{env.KAFKA_OAUTH_CLIENT_ID}}" and oauthClientSecret "{{env.KAFKA_OAUTH_CLIENT_SECRET}}"
+      and oauthScope "{{env.KAFKA_OAUTH_SCOPE}}" and oauthEndpoint "{{env.KAFKA_OAUTH_CLIENT_ENDPOINT_URI}}"
+      and trustStorePath "{{env.KAFKA_SSL_TRUST_STORE_LOCATION}}" and trustStorePassword "{{env.KAFKA_SSL_TRUST_STORE_PASSWORD}}"
+    And   I setup kafka producer
+    And   I setup kafka consumer with groupId "{{env.KAFKA_GROUP_ID}}-my-test-1"
+    And   I enable Confluent wire format with schema id 1
+    And   I listen for Kafka messages on the topic "referentiel-personne.usager.creation.dlt.qual"
+
+    When  I send a Kafka message on the topic "referentiel-personne.usager.creation.qual" with body:
+      """
+      {
+        "header": {
+          "correlation_id": "test-qual-001",
+          "event_type": "USAGER_CREE",
+          "timestamp": 1717434859000,
+          "source_application": "e2e-test-runner",
+          "source_component": "test-suite",
+          "source_topic": null,
+          "version": "1.0.0"
+        },
+        "payload": { }
+      }
+      """
+
+    Then I wait 5s
+    Then I log kafka messages
+    Then I expect a message on Kafka topic "referentiel-personne.usager.creation.dlt.qual" matches regex "test-qual-001"
+```
+
+**Corresponding `.env-qual` entries:**
+
+```env
+KAFKA_HOST=kafka-bootstrap-kube-qual.anah.fr
+KAFKA_PORT=30104
+KAFKA_GROUP_ID=kafka-ciam.group.qual
+KAFKA_OAUTH_CLIENT_ID=kafka-ciam-user-qual
+KAFKA_OAUTH_CLIENT_SECRET=<secret>
+KAFKA_OAUTH_CLIENT_ENDPOINT_URI=https://acces-qualif.anah.fr/oauth2/token
+KAFKA_SSL_TRUST_STORE_LOCATION=/path/to/client-truststore.p12
+KAFKA_SSL_TRUST_STORE_PASSWORD=<truststore-password>
+```
+
 ---
 
 ### 🔡 Ldap directory
@@ -1238,6 +1398,8 @@ Given I set the viewport size to <width> px by <height> px
 
 # ☕ Kafka Messaging Steps
 Given I setup kafka with clientId "<clientId>" and broker "<broker>"
+Given I setup kafka with clientId "<clientId>" and broker "<host:port>" and oauthClientId "<id>" and oauthClientSecret "<secret>" and oauthScope "<scope>" and oauthEndpoint "<url>" and trustStorePath "<path>" and trustStorePassword "<password>"
+Given I enable Confluent wire format with schema id <schemaId>
 Given I setup kafka producer
 Given I setup kafka consumer with groupId "<groupId>"
 Given I listen for Kafka messages on the topic "<topic>"

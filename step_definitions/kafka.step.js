@@ -5,6 +5,67 @@ afterEach(() => {
     cy.task('clearKafka');
 });
 
+/**
+ * Initialize Kafka with auto-detection of plain vs SASL/SSL (OAUTHBEARER) mode.
+ * 
+ * When oauthClientId and trustStorePath are both non-empty → SASL/SSL mode (OAUTHBEARER auth + SSL truststore).
+ * Otherwise → plain mode (no auth, no SSL).
+ * 
+ * All values are explicit Gherkin parameters so the feature file controls every setting.
+ * Each parameter supports Nunjucks templating (e.g. "{{ env.KAFKA_HOST }}").
+ *
+ * Parameters:
+ *   clientId          — Kafka client ID
+ *   broker            — broker address as "host:port"
+ *   oauthClientId     — OIDC client_id used to fetch the bearer token (client_credentials grant)
+ *   oauthClientSecret — OIDC client_secret
+ *   oauthScope        — OIDC scope (e.g. "openid")
+ *   oauthEndpoint     — OIDC token endpoint URL
+ *   trustStorePath    — absolute local path to the P12 truststore file
+ *   trustStorePassword — passphrase for the P12 truststore
+ *
+ * Example (plain mode — local development):
+ *   Given I setup kafka with clientId "e2e-test" and broker "localhost:9092"
+ *     and oauthClientId "" and oauthClientSecret ""
+ *     and oauthScope "" and oauthEndpoint ""
+ *     and trustStorePath "" and trustStorePassword ""
+ *
+ * Example (SASL/SSL mode — qualification/recette):
+ *   Given I setup kafka with clientId "e2e-test" and broker "{{env.KAFKA_HOST}}:{{env.KAFKA_PORT}}"
+ *     and oauthClientId "{{env.KAFKA_OAUTH_CLIENT_ID}}" and oauthClientSecret "{{env.KAFKA_OAUTH_CLIENT_SECRET}}"
+ *     and oauthScope "openid" and oauthEndpoint "{{env.KAFKA_OAUTH_CLIENT_ENDPOINT_URI}}"
+ *     and trustStorePath "{{env.KAFKA_SSL_TRUST_STORE_LOCATION}}" and trustStorePassword "{{env.KAFKA_SSL_TRUST_STORE_PASSWORD}}"
+ */
+Given(
+    'I setup kafka with clientId {string} and broker {string} and oauthClientId {string} and oauthClientSecret {string} and oauthScope {string} and oauthEndpoint {string} and trustStorePath {string} and trustStorePassword {string}',
+    (templatedClientId, templatedBroker, templatedOauthClientId, templatedOauthClientSecret, templatedOauthScope, templatedOauthEndpoint, templatedTrustStorePath, templatedTrustStorePassword) => {
+        return cy.getContext().then((context) => {
+            const broker = render(templatedBroker, context);
+            const [host, port] = broker.split(':');
+            return cy.task('initKafkaAuto', {
+                host,
+                port,
+                clientId:          render(templatedClientId, context),
+                oauthClientId:     render(templatedOauthClientId, context),
+                oauthClientSecret: render(templatedOauthClientSecret, context),
+                oauthScope:        render(templatedOauthScope, context),
+                oauthEndpoint:     render(templatedOauthEndpoint, context),
+                trustStorePath:    render(templatedTrustStorePath, context),
+                trustStorePassword:render(templatedTrustStorePassword, context),
+            });
+        });
+    }
+);
+
+/**
+ * Enable Confluent wire format encoding for subsequent Kafka send/receive.
+ * Sent messages will be prefixed with the 5-byte Confluent header (magic byte + schema ID).
+ * Received messages will have that header stripped automatically.
+ */
+Given('I enable Confluent wire format with schema id {int}', (schemaId) => {
+    return cy.task('enableConfluentWireFormat', { schemaId });
+});
+
 Given('I setup kafka with clientId {string} and broker {string}', (templatedClientId, templatedBroker) => {
     cy.getContext().then((context) => {
         const clientId = render(templatedClientId, context);
@@ -101,7 +162,7 @@ Then('I expect a message on Kafka topic {string} equals to:', (templatedTopic, d
     let message;
     return cy.getContext().then((context) => {
         const topic = render(templatedTopic, context);
-        message = render(templatedMessage, context);
+        message = render(docString, context);
 
         return cy.task('getKafkaMessages', {topic});
     }).then((messages) => {
@@ -119,7 +180,7 @@ Then('I expect a message on Kafka topic {string} contains {string}', (templatedT
 
         return cy.task('getKafkaMessages', {topic});
     }).then((messages) => {
-        const found = messages.some(msg => msg === msg.includes(message));
+        const found = messages.some(msg => msg.includes(message));
 
         expect(found).to.equal(true);
     });
@@ -133,7 +194,7 @@ Then('I expect a message on Kafka topic {string} contains:', (templatedTopic, do
 
         return cy.task('getKafkaMessages', {topic});
     }).then((messages) => {
-        const found = messages.some(msg => msg === msg.includes(message));
+        const found = messages.some(msg => msg.includes(message));
 
         expect(found).to.equal(true);
     });
