@@ -214,26 +214,34 @@ class KafkaService {
 
     async listenKafkaTopic({topic}) {
         await this.consumer.connect();
-        await this.consumer.subscribe({topic, fromBeginning: true});
-        this.consumer.run({
-            eachMessage: async ({message}) => {
-                if (!this.messages[topic]) {
-                    this.messages[topic] = [];
-                }
+        await this.consumer.subscribe({topic, fromBeginning: false});
+        // Wait until the consumer has joined the group and received partition
+        // assignments — only then is it truly ready to receive new messages.
+        await new Promise((resolve) => {
+            const off = this.consumer.on(this.consumer.events.GROUP_JOIN, () => {
+                off();
+                resolve();
+            });
+            this.consumer.run({
+                eachMessage: async ({message}) => {
+                    if (!this.messages[topic]) {
+                        this.messages[topic] = [];
+                    }
 
-                let rawValue = message.value;
+                    let rawValue = message.value;
 
-                // Strip Confluent wire format header (magic byte 0x00 + 4-byte schema ID)
-                // if Confluent format is enabled and the message starts with the magic byte
-                if (this.confluentConfig.enabled
-                    && rawValue
-                    && rawValue.length > 5
-                    && rawValue[0] === 0x00) {
-                    rawValue = rawValue.slice(5);
-                }
+                    // Strip Confluent wire format header (magic byte 0x00 + 4-byte schema ID)
+                    // if Confluent format is enabled and the message starts with the magic byte
+                    if (this.confluentConfig.enabled
+                        && rawValue
+                        && rawValue.length > 5
+                        && rawValue[0] === 0x00) {
+                        rawValue = rawValue.slice(5);
+                    }
 
-                this.messages[topic].push(he.decode(rawValue.toString()));
-            },
+                    this.messages[topic].push(he.decode(rawValue.toString()));
+                },
+            });
         });
         return null;
     }
