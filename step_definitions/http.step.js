@@ -63,6 +63,21 @@ Given('I set http header {string} with {string}', (key, templatedValue) => {
     });
 })
 
+Then('I decode base64 string {string} and store it as JSON {string} in context', (templatedBase64, key) => {
+    cy.getContext().then((context) => {
+        const base64 = render(templatedBase64, context);
+        const jsonPayload = decodeURIComponent(
+            atob(base64)
+              .split('')
+              .map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+              .join('')
+        );
+        const {ctx} = context;
+        ctx[key] = JSON.parse(jsonPayload);
+        return cy.setContext({ctx});
+    });
+});
+
 Then('I decode JWT token {string} and store it as JSON {string} in context', (templatedEncodedJwt, decodedJwt) => {
 
     cy.getContext().then((context) => {
