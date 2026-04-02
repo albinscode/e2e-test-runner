@@ -43,6 +43,15 @@ When('I add a ldap entry with dn {string} and with attributes {string}', (templa
     });
 });
 
+When('I modify ldap entry {string} and replace attribute {string} with value {string}', (templatedEntryDn, attribute, templatedValue) => {
+    return cy.getContext().then((context) => {
+        const entryDn = render(templatedEntryDn, context);
+        const value = render(templatedValue, context);
+
+        return cy.task('modifyLdapEntry', {entryDn, attribute, value});
+    });
+});
+
 Then('I expect {int} ldap results', (expectedLength) => {
 
     cy.getContext().then((context) => {

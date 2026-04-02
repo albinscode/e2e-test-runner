@@ -1,4 +1,4 @@
-const {Client} = require('ldapts');
+const {Client, Change, Attribute} = require('ldapts');
 
 class LdapService {
     constructor() {
@@ -75,6 +75,21 @@ class LdapService {
             await this.client.add(entryDn, entry);
         } catch (err) {
             console.error('Ldap add error:', err);
+        }
+
+        return null;
+    }
+
+    async modifyLdapEntry({entryDn, attribute, value}) {
+        try {
+            await this.client.modify(entryDn, [
+                new Change({
+                    operation: 'replace',
+                    modification: new Attribute({type: attribute, values: [value]}),
+                }),
+            ]);
+        } catch (err) {
+            console.error('Ldap modify error:', err);
         }
 
         return null;
