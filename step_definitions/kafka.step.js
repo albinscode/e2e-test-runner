@@ -217,3 +217,32 @@ Then('I expect a message on Kafka topic {string} matches regex {string}', (templ
 Then('I log kafka messages', () => {
     cy.task('logKafkaMessages');
 })
+
+Then('I store message from Kafka topic {string} with base64 payload matching correlation id {string} as JSON {string} in context', (templatedTopic, templatedCorrelationId, key) => {
+    return cy.getContext().then((context) => {
+        const topic = render(templatedTopic, context);
+        const correlationId = render(templatedCorrelationId, context);
+        return cy.task('getKafkaMessages', {topic}).then((messages) => {
+            const found = messages.find(msg => {
+                try {
+                    const outer = JSON.parse(msg);
+                    const decoded = JSON.parse(decodeURIComponent(
+                        atob(outer.payload)
+                          .split('')
+                          .map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+                          .join('')
+                    ));
+                    return decoded.header && decoded.header.correlation_id === correlationId;
+                } catch (_) {
+                    return false;
+                }
+            });
+            expect(found, `Expected a DLT message with correlation_id="${correlationId}" on topic "${topic}"`).to.exist;
+            return cy.getContext().then((context) => {
+                const {ctx} = context;
+                ctx[key] = JSON.parse(found);
+                return cy.setContext({ctx});
+            });
+        });
+    });
+});

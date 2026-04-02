@@ -37,7 +37,7 @@ module.exports = defineConfig({
         // specPattern: `${absolutePath}/**/lldap_sessions*.feature`,
         // specPattern: `${absolutePath}/**/lldap_connect*.feature`,
         // specPattern: `${absolutePath}/**/dm.feature`,
-        // specPattern: `${absolutePath}/**/kafka_all*.feature`,
+        specPattern: `${absolutePath}/**/kafka_all*.feature`,
         // specPattern: `${absolutePath}/**/kafka_tache*.feature`,
         // specPattern: `${absolutePath}/**/lldap_tache*.feature`,
         // specPattern: `${absolutePath}/**/lldap_reset*.feature`,
@@ -334,11 +334,17 @@ module.exports = defineConfig({
                         .then(() => producer.disconnect())
                         .then(() => null);
                 },
-                listenKafkaTopic({topic}) {
-                    consumer
-                        .connect()
-                        .then(() => consumer.subscribe({topic, fromBeginning: true}))
-                        .then(() => consumer.run({
+                async listenKafkaTopic({topic}) {
+                    await consumer.connect();
+                    await consumer.subscribe({topic, fromBeginning: false});
+                    // Wait until the consumer has joined the group and received partition
+                    // assignments — only then is it truly ready to receive new messages.
+                    await new Promise((resolve) => {
+                        const off = consumer.on(consumer.events.GROUP_JOIN, () => {
+                            off();
+                            resolve();
+                        });
+                        consumer.run({
                             eachMessage: async ({message}) => {
                                 if (!kafkaMessages[topic]) {
                                     kafkaMessages[topic] = [];
@@ -357,7 +363,8 @@ module.exports = defineConfig({
 
                                 kafkaMessages[topic].push(he.decode(rawValue.toString()));
                             },
-                        }));
+                        });
+                    });
                     return null;
                 },
                 getKafkaMessages({topic}) {
