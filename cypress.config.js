@@ -10,17 +10,38 @@ const fs = require('fs');
 const https = require('https');
 const {Kafka, logLevel} = require('kafkajs');
 const he = require('he');
-const { Client } = require('ldapts');
+const { Client, Change, Attribute } = require('ldapts');
 const { Client: PgClient } = require('pg');
 
 dotenv.config();
 
 const absolutePath = path.resolve(process.env.CYPRESS_FEATURES_PATH);
 
+
 module.exports = defineConfig({
     e2e: {
         env: process.env,
-        specPattern: `${absolutePath}/**/secu*.feature`,
+        specPattern: `${absolutePath}/**/*.feature`,
+        // specPattern: `${absolutePath}/**/all_http_services.feature`,
+        // specPattern: `${absolutePath}/**/lldap_refresh_token.feature`,
+        // specPattern: `${absolutePath}/**/secu_courrier*.feature`,
+        // specPattern: `${absolutePath}/**/lldap_fcp_sec*.feature`,
+        // specPattern: `${absolutePath}/**/llng_logout*.feature`,
+        // specPattern: `${absolutePath}/**/lldap_passwords*.feature`,
+        // specPattern: `${absolutePath}/**/lldap_rapprochement_api*.feature`,
+        // specPattern: `${absolutePath}/**/lldap_rapprochement_jwt*.feature`,
+        // specPattern: `${absolutePath}/**/lldap_create*api.feature`,
+        // specPattern: `${absolutePath}/**/lldap_modification*.feature`,
+        // specPattern: `${absolutePath}/**/lldap_fcp.feature`,
+        // specPattern: `${absolutePath}/**/lldap_secu*.feature`,
+        // specPattern: `${absolutePath}/**/lldap_sessions*.feature`,
+        // specPattern: `${absolutePath}/**/lldap_connect*.feature`,
+        // specPattern: `${absolutePath}/**/dm.feature`,
+        // specPattern: `${absolutePath}/**/kafka_all*.feature`,
+        // specPattern: `${absolutePath}/**/kafka_tache*.feature`,
+        // specPattern: `${absolutePath}/**/lldap_tache*.feature`,
+        // specPattern: `${absolutePath}/**/lldap_reset*.feature`,
+        // specPattern: `${absolutePath}/**/lldap_cre*kafka*.feature`,
         supportFile: 'support/e2e.js',
         reporter: require.resolve('@badeball/cypress-cucumber-preprocessor/pretty-reporter'),
         async setupNodeEvents(on, config) {
@@ -406,6 +427,20 @@ module.exports = defineConfig({
                     }
                     catch (err) {
                         console.error('Ldap add error:', err)
+                    }
+                    return null;
+                },
+                async modifyLdapEntry({entryDn, attribute, value}) {
+                    try {
+                        await ldapClient.modify(entryDn, [
+                            new Change({
+                                operation: 'replace',
+                                modification: new Attribute({ type: attribute, values: [value] })
+                            })
+                        ]);
+                    }
+                    catch (err) {
+                        console.error('Ldap modify error:', err);
                     }
                     return null;
                 },
