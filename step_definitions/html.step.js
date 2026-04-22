@@ -161,6 +161,16 @@ Then('I expect the HTML element {string} to be enabled', (templatedSelector) => 
   });
 });
 
+Then('I expect the HTML element {string} not to be disabled', (templatedSelector) => {
+  cy.getContext().then((context) => {
+    const selector = render(templatedSelector, context);
+
+    runWithOrigin(context, () => {
+      cy.get(selector).should('not.be.disabled');
+    });
+  });
+});
+
 Then('I expect the HTML element {string} is checked', (templatedSelector) => {
   cy.getContext().then((context) => {
     const selector = render(templatedSelector, context);
@@ -216,6 +226,34 @@ Then(
           expect(Math.trunc(element.position().left)).eq(x);
           expect(Math.trunc(element.position().top)).eq(y);
         });
+      });
+    });
+  },
+);
+
+Then(
+  'I expect the HTML element {string} not to have attribute {string}',
+  (templatedSelector, templatedAttribute) => {
+    cy.getContext().then((context) => {
+      const selector = render(templatedSelector, context);
+      const attribute = render(templatedAttribute, context);
+
+      runWithOrigin(context, () => {
+        cy.get(selector).should('not.have.attr', attribute);
+      });
+    });
+  },
+);
+
+When(
+  'I attach the file {string} to the HTML element {string}',
+  (templatedFilePath, templatedSelector) => {
+    cy.getContext().then((context) => {
+      const filePath = render(templatedFilePath, context);
+      const selector = render(templatedSelector, context);
+
+      runWithOrigin(context, () => {
+        cy.get(selector).selectFile(filePath, { force: true });
       });
     });
   },
