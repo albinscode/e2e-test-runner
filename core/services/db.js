@@ -8,15 +8,19 @@ class DbService {
     }
 
     // You can pass a full connection string or individual parts.
-    initDb({connectionString, driver, user, password, host, port, database}) {
+    async initDb({connectionString, driver, user, password, host, port, database}) {
         const cfg = connectionString
             ? {connectionString}
             : {user, password, host, port, database};
 
         // we currenly only manage postgres driver
         if (driver === 'postgres' || (connectionString && connectionString.indexOf('postgres') === 0)) {
+            if (this.client) {
+                await this.client.end();
+                this.client = null;
+            }
             this.client = new PgClient(cfg);
-            this.client.connect();
+            await this.client.connect();
         } else {
             throw new Error('Unknown db protocol, only postgres managed currently');
         }
@@ -131,7 +135,9 @@ class DbService {
 
     closeDb() {
         if (this.client) {
-            return this.client.end();
+            const client = this.client;
+            this.client = null;
+            return client.end().then(() => null);
         }
         return null;
     }
