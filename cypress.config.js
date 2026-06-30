@@ -452,15 +452,19 @@ module.exports = defineConfig({
                     return null;
                 },
                 // You can pass a full connection string or individual parts.
-                initDb({ connectionString, driver, user, password, host, port, database }) {
+                async initDb({ connectionString, driver, user, password, host, port, database }) {
                     const cfg = connectionString
                         ? { connectionString }
                         : { user, password, host, port, database };
 
                     // we currenly only manage postgres driver
-                    if (cfg.driver === 'postgres' || cfg.connectionString.indexOf('postgres') === 0) {
+                    if (connectionString?.indexOf('postgres') === 0 || driver === 'postgres') {
+                        if (dbClient) {
+                            await dbClient.end();
+                            dbClient = null;
+                        }
                         dbClient = new PgClient(cfg);
-                        dbClient.connect();
+                        await dbClient.connect();
                     }
                     else {
                         throw new Error("Unknown db protocol, only postgres managed currently");
@@ -561,7 +565,9 @@ module.exports = defineConfig({
 
                 closeDb() {
                     if (dbClient) {
-                        return dbClient.end();
+                        const client = dbClient;
+                        dbClient = null;
+                        return client.end().then(() => null);
                     }
                     return null;
                 },
