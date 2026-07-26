@@ -46,6 +46,20 @@ When('I request {string} with method {string} with body:', (templatedUrl, method
     });
 });
 
+When('I request {string} with method {string} without cookies with body:', (templatedUrl, method, docString) => {
+    cy.getContext().then((context) => {
+        const url = nunjucks.renderString(templatedUrl, context);
+        const body = nunjucks.renderString(docString, context);
+
+        return cy.task('httpRequestNoCookies', {
+            method,
+            url,
+            headers: {...context.httpHeaders},
+            body
+        }).then((response) => cy.setContext({response}));
+    });
+});
+
 Then('I expect status code is {int}', (expected) => {
     cy.getContext().then((context) => {
         expect(context.response.status).to.equal(expected);
