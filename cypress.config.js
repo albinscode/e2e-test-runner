@@ -8,6 +8,7 @@ const dotenv = require("dotenv");
 const path = require('path');
 const fs = require('fs');
 const https = require('https');
+const http = require('http');
 const {Kafka, logLevel} = require('kafkajs');
 const he = require('he');
 const { Client, Change, Attribute } = require('ldapts');
@@ -22,22 +23,31 @@ module.exports = defineConfig({
     e2e: {
         env: process.env,
         specPattern: `${absolutePath}/**/*.feature`,
+        // specPattern: `${absolutePath}/**/llng_session_cache_ttl.feature`,
         // specPattern: `${absolutePath}/**/all_http_services.feature`,
         // specPattern: `${absolutePath}/**/lldap_refresh_token.feature`,
+        // specPattern: `${absolutePath}/**/secu_courrier*mpr.feature`,
         // specPattern: `${absolutePath}/**/secu_courrier*.feature`,
+        // specPattern: `${absolutePath}/**/llng_saml*.feature`,
         // specPattern: `${absolutePath}/**/lldap_fcp_sec*.feature`,
+        // specPattern: `${absolutePath}/**/lldap_secu*.feature`,
+        // specPattern: `${absolutePath}/**/lldap_fcp.feature`,
+        // specPattern: `${absolutePath}/**/lldap_fc*.feature`,
         // specPattern: `${absolutePath}/**/llng_logout*.feature`,
+        // specPattern: `${absolutePath}/**/lldap_fcp_rapprochement.feature`,
         // specPattern: `${absolutePath}/**/lldap_passwords*.feature`,
         // specPattern: `${absolutePath}/**/lldap_rapprochement_api*.feature`,
         // specPattern: `${absolutePath}/**/lldap_rapprochement_jwt*.feature`,
+        // specPattern: `${absolutePath}/**/lldap_rapprochement_password.feature`,
+        // specPattern: `${absolutePath}/**/kafka_fcp_creation*.feature`,
         // specPattern: `${absolutePath}/**/lldap_create*api.feature`,
-        // specPattern: `${absolutePath}/**/lldap_modification*.feature`,
-        // specPattern: `${absolutePath}/**/lldap_fcp.feature`,
-        // specPattern: `${absolutePath}/**/lldap_secu*.feature`,
+        // specPattern: `${absolutePath}/**/lldap_modification_api.feature`,
+        // specPattern: `${absolutePath}/**/lldap_login_account_status.feature`,
         // specPattern: `${absolutePath}/**/lldap_sessions*.feature`,
         // specPattern: `${absolutePath}/**/lldap_connect*.feature`,
         // specPattern: `${absolutePath}/**/dm.feature`,
-        specPattern: `${absolutePath}/**/kafka_all*.feature`,
+        // specPattern: `${absolutePath}/**/lldap_email_val*.feature`,
+        // specPattern: `${absolutePath}/**/kafka_all*.feature`,
         // specPattern: `${absolutePath}/**/kafka_tache*.feature`,
         // specPattern: `${absolutePath}/**/lldap_tache*.feature`,
         // specPattern: `${absolutePath}/**/lldap_reset*.feature`,
