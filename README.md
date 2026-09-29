@@ -1349,7 +1349,7 @@ Feature: Kafka qual environment
     And   I enable Confluent wire format with schema id 1
     And   I listen for Kafka messages on the topic "referentiel-personne.usager.creation.dlt.qual"
 
-    When  I send a Kafka message on the topic "referentiel-personne.usager.creation.qual" with body:
+    When  I send a Kafka message on the topic "referentiel-personne.usager.creation.reponse.qual" with body:
       """
       {
         "header": {
@@ -1658,6 +1658,97 @@ Given I add a row to table "users" with values
 
 ---
 
+### 📧 Mails (Mailpit)
+
+Mails are read through the [Mailpit REST API](https://mailpit.axllent.org/docs/api-v1/). Recipients are matched
+exactly (Mailpit `to:` search being a substring match, results are filtered on the exact address).
+
+The last fetched mail is stored in the context as `mail` (like `response` for HTTP requests) and can be used in
+templates: `{{ mail.Subject }}`, `{{ mail.Text }}`, `{{ mail.HTML }}`, `{{ mail.To[0].Address }}`, `{{ mail.raw }}`
+(raw SMTP source).
+
+1. Setup Mailpit url (required before any other mail step)
+
+```gherkin
+Given I setup mailpit with url "<url>"
+
+# Example:
+Given I setup mailpit with url "https://mail.company.com"
+```
+
+2. Delete all mails sent to a recipient
+
+```gherkin
+Given I delete all mails sent to "<recipient>"
+
+# Example:
+Given I delete all mails sent to "john.doe@example.com"
+```
+
+3. Get the last mail sent to a recipient, optionally filtered on its subject (waits up to 15s for the mail)
+
+```gherkin
+When I get the last mail sent to "<recipient>"
+When I get the last mail sent to "<recipient>" with subject "<subject>"
+
+# Example:
+When I get the last mail sent to "john.doe@example.com" with subject "Activation"
+```
+
+4. Expect the number of mails sent to a recipient
+
+```gherkin
+Then I expect <count> mail(s) sent to "<recipient>"
+
+# Example:
+Then I expect 0 mails sent to "john.doe@example.com"
+```
+
+5. Expect the subject of the last fetched mail
+
+```gherkin
+Then I expect the mail subject is "<subject>"
+
+# Example:
+Then I expect the mail subject is "Activation de votre compte"
+```
+
+6. Expect a text in the last fetched mail (checked in the text part and in the visible text of the HTML part)
+
+```gherkin
+Then I expect the mail contains "<text>"
+
+# Example:
+Then I expect the mail contains "Bonjour John Doe,"
+```
+
+7. Store in context the first link of the HTML part containing a given value
+
+```gherkin
+Then I store the mail link containing "<value>" as "<key>" in context
+
+# Example:
+Then I store the mail link containing "register_token=" as "activationUrl" in context
+When I visit the "{{ ctx.activationUrl }}"
+```
+
+8. Expect the last fetched mail to be correctly encoded in UTF-8
+
+```gherkin
+Then I expect the mail is correctly encoded in UTF-8
+```
+
+It checks that:
+- the raw SMTP source is valid UTF-8,
+- raw headers are ASCII only, and a non-ASCII subject is RFC 2047 encoded with the `utf-8` charset,
+- every `text/*` part declares `charset=utf-8`,
+- subject, text and HTML parts contain no mojibake (UTF-8 read as Latin-1, e.g. `Ã©` instead of `é`),
+  no replacement character `�` and no C1 control characters,
+- subject and text part contain no HTML entity (e.g. `&nbsp;`), HTML part contains no double-escaped
+  entity (e.g. `&amp;eacute;`).
+
+---
+
 ### ✅ Step Summary
 
 ```gherkin
@@ -1808,6 +1899,17 @@ When I execute sql request "<sql>" with values:
 [value1, value2, ...]
 """
 Then I expect <count> database results
+
+# 📧 Mails (Mailpit)
+Given I setup mailpit with url "<url>"
+Given I delete all mails sent to "<recipient>"
+When I get the last mail sent to "<recipient>"
+When I get the last mail sent to "<recipient>" with subject "<subject>"
+Then I expect <count> mail(s) sent to "<recipient>"
+Then I expect the mail subject is "<subject>"
+Then I expect the mail contains "<text>"
+Then I store the mail link containing "<value>" as "<key>" in context
+Then I expect the mail is correctly encoded in UTF-8
 ```
 
 ## 🧪 Testing the runner
