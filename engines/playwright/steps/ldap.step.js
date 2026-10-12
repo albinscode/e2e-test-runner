@@ -39,3 +39,15 @@ Then('I expect {int} ldap results', async ({ ldap }, expectedLength) => {
 Then('I delete all ldap results', async ({ ldap }) => {
     await ldap.deleteLdapResults();
 });
+
+When('I modify ldap entry {string} and replace attribute {string} with value {string}', async ({ ldap, world }, templatedEntryDn, attribute, templatedValue) => {
+    await ldap.modifyLdapEntry({
+        entryDn: render(templatedEntryDn, world),
+        attribute,
+        value: render(templatedValue, world),
+    });
+});
+
+Then('I store ldap results as {string} in context', async ({ ldap, world }, key) => {
+    world.ctx[key] = ldap.getLdapResults();
+});

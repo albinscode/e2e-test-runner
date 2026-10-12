@@ -1,5 +1,5 @@
 import {Given, Then, When} from "@badeball/cypress-cucumber-preprocessor";
-import {convert, render} from "../../../core/utils";
+import {convert, findMessageByCorrelationId, render} from "../../../core/utils";
 
 afterEach(() => {
     cy.task('clearKafka');
@@ -113,6 +113,14 @@ Given('I listen for Kafka messages on the topic {string}', (templatedTopic) => {
     });
 });
 
+Given('I listen for new Kafka messages on the topic {string}', (templatedTopic) => {
+    return cy.getContext().then((context) => {
+        const topic = render(templatedTopic, context);
+
+        return cy.task('listenKafkaTopic', {topic, fromBeginning: false});
+    });
+});
+
 Then('I expect {int} message(s) received on Kafka topic {string}', (expectedLength, templatedTopic) => {
     return cy.getContext().then((context) => {
         const topic = render(templatedTopic, context);
@@ -223,20 +231,7 @@ Then('I store message from Kafka topic {string} with base64 payload matching cor
         const topic = render(templatedTopic, context);
         const correlationId = render(templatedCorrelationId, context);
         return cy.task('getKafkaMessages', {topic}).then((messages) => {
-            const found = messages.find(msg => {
-                try {
-                    const outer = JSON.parse(msg);
-                    const decoded = JSON.parse(decodeURIComponent(
-                        atob(outer.payload)
-                          .split('')
-                          .map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
-                          .join('')
-                    ));
-                    return decoded.header && decoded.header.correlation_id === correlationId;
-                } catch (_) {
-                    return false;
-                }
-            });
+            const found = findMessageByCorrelationId(messages, correlationId);
             expect(found, `Expected a DLT message with correlation_id="${correlationId}" on topic "${topic}"`).to.exist;
             return cy.getContext().then((context) => {
                 const {ctx} = context;

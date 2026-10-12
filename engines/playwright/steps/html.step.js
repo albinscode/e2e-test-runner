@@ -296,3 +296,25 @@ When('I set file input {string} with file(s) {string}', async ({ page, world }, 
 
     await locate(page, world, templatedSelector).setInputFiles(filePaths);
 });
+
+// Playwright drives every origin the same way: the origin url only matters to Cypress (`cy.origin`).
+When('I click on {string} with origin url {string}', async ({ page, world }, templatedSelector, _templatedOriginUrl) => {
+    await locate(page, world, templatedSelector).click();
+});
+
+Then('I expect the HTML element {string} exists with origin url {string}', async ({ page, world }, templatedSelector, _templatedOriginUrl) => {
+    await expect(locate(page, world, templatedSelector).first()).toBeAttached();
+});
+
+Then('I set the text {string} in the HTML element {string} with origin url {string}', async ({ page, world }, templatedValue, templatedSelector, _templatedOriginUrl) => {
+    const locator = locate(page, world, templatedSelector);
+
+    await locator.fill('');
+    await typeText(locator, render(templatedValue, world));
+});
+
+Then('I expect the HTML element {string} contains {string} with origin url {string}', async ({ page, world }, templatedSelector, templatedValue, _templatedOriginUrl) => {
+    const value = render(templatedValue, world);
+
+    await expect.poll(() => getText(locate(page, world, templatedSelector))).toContain(value);
+});

@@ -1,6 +1,7 @@
 const { expect } = require('@playwright/test');
 const { Given, Then, When } = require('../fixtures');
-const { getDataTable, render } = require('../../../core/utils');
+const HttpService = require('../../../core/services/http');
+const { decodeBase64Json, decodeJwtPayload, getDataTable, render } = require('../../../core/utils');
 
 // Same shape as the Cypress `cy.request` response: JSON bodies are parsed.
 async function toResponse(response) {
@@ -51,6 +52,16 @@ When('I request {string} with method {string} with body:', async ({ page, world 
     await request(page, world, render(templatedUrl, world), { method, data });
 });
 
+// Node-side request, without the browser cookies (e.g. to look unauthenticated to the SSO portal).
+When('I request {string} with method {string} without cookies with body:', async ({ world }, templatedUrl, method, docString) => {
+    world.response = await new HttpService().httpRequestNoCookies({
+        method,
+        url: render(templatedUrl, world),
+        headers: { ...world.httpHeaders },
+        body: render(docString, world),
+    });
+});
+
 Then('I expect status code is {int}', async ({ world }, expected) => {
     expect(world.response.status).toBe(expected);
 });
@@ -69,4 +80,12 @@ Then('I expect http header {string} contains {string}', async ({ world }, header
     const expected = render(templatedExpected, world);
 
     expect(world.response.headers[headerName.toLowerCase()]).toContain(expected);
+});
+
+Then('I decode base64 string {string} and store it as JSON {string} in context', async ({ world }, templatedBase64, key) => {
+    world.ctx[key] = decodeBase64Json(render(templatedBase64, world));
+});
+
+Then('I decode JWT token {string} and store it as JSON {string} in context', async ({ world }, templatedEncodedJwt, key) => {
+    world.ctx[key] = decodeJwtPayload(render(templatedEncodedJwt, world));
 });

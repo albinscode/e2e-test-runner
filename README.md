@@ -1108,6 +1108,13 @@ Given I listen for Kafka messages on the topic "<topic>"
 Given I listen for Kafka messages on the topic "orders"
 ```
 
+Messages already on the topic are received too. To only receive the messages sent once the consumer has joined its
+group (e.g. on a long-lived shared topic), use:
+
+```gherkin
+Given I listen for new Kafka messages on the topic "<topic>"
+```
+
 5. Send kafka message
 
 ```gherkin
@@ -1347,7 +1354,7 @@ Feature: Kafka qual environment
     And   I setup kafka producer
     And   I setup kafka consumer with groupId "{{env.KAFKA_GROUP_ID}}-my-test-1"
     And   I enable Confluent wire format with schema id 1
-    And   I listen for Kafka messages on the topic "referentiel-personne.usager.creation.dlt.qual"
+    And   I listen for new Kafka messages on the topic "referentiel-personne.usager.creation.dlt.qual"
 
     When  I send a Kafka message on the topic "referentiel-personne.usager.creation.reponse.qual" with body:
       """

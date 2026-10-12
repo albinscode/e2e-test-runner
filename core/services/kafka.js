@@ -212,9 +212,11 @@ class KafkaService {
         return null;
     }
 
-    async listenKafkaTopic({topic}) {
+    // fromBeginning: false only receives the messages sent after the consumer joined its group,
+    // to ignore the history of long-lived shared topics.
+    async listenKafkaTopic({topic, fromBeginning = true}) {
         await this.consumer.connect();
-        await this.consumer.subscribe({topic, fromBeginning: false});
+        await this.consumer.subscribe({topic, fromBeginning});
         // Wait until the consumer has joined the group and received partition
         // assignments — only then is it truly ready to receive new messages.
         await new Promise((resolve) => {

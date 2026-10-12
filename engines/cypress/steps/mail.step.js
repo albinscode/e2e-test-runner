@@ -1,6 +1,24 @@
 import {Given, Then, When} from "@badeball/cypress-cucumber-preprocessor";
 import he from "he";
 import {render} from "../../../core/utils";
+import {
+    C1_CONTROLS,
+    DOUBLE_ESCAPED_ENTITY,
+    ENCODED_WORD,
+    HTML_ENTITY,
+    MAIL_POLL_ATTEMPTS,
+    MAIL_POLL_INTERVAL_MS,
+    MOJIBAKE,
+    REPLACEMENT_CHAR,
+    binaryStringToBytes,
+    extractLinks,
+    filterRecipient,
+    htmlToText,
+    noMailError,
+    rawHeader,
+    rawHeaderBlock,
+    searchQuery,
+} from "../../../core/mail";
 
 /*
  * Mail steps backed by the Mailpit REST API (https://mailpit.axllent.org/docs/api-v1/).
@@ -13,43 +31,17 @@ import {render} from "../../../core/utils";
  *   {{ mail.Subject }}, {{ mail.Text }}, {{ mail.HTML }}, {{ mail.To[0].Address }}...
  */
 
-const MAIL_POLL_ATTEMPTS = 15;
-const MAIL_POLL_INTERVAL_MS = 1000;
-
-// Latin-1/cp1252 mis-decode of UTF-8 bytes: "é" (C3 A9) -> "Ã©", "à" (C3 A0) -> "Ã ",
-// nbsp (C2 A0) -> "Â ", "ř" (C5 99) -> "Å\u0099"... A lead char in [ÂÃÄÅ] followed
-// by a Latin-1 continuation-range char or a cp1252 punctuation char never occurs in
-// legitimate French text.
-const MOJIBAKE = /[ÂÃÄÅ][\u0080-¿ŒœŠšŸŽžƒˆ˜–—‘-„†-•…‰‹›€™]/;
-// C1 control characters: a raw byte decoded as Latin-1 instead of UTF-8.
-const C1_CONTROLS = /[\u0080-\u009F]/;
-const REPLACEMENT_CHAR = /�/;
-// An HTML entity that should have been decoded before reaching a plain-text field.
-const HTML_ENTITY = /&(#\d+|#x[0-9a-f]+|[a-z][a-z0-9]*);/i;
-// An entity escaped twice ("&amp;eacute;", "&amp;nbsp;") renders literally in the HTML part.
-const DOUBLE_ESCAPED_ENTITY = /&amp;(#\d+|#x[0-9a-f]+|[a-z][a-z0-9]*);/i;
-// RFC 2047 encoded-word (the only valid way to carry non-ASCII in a header).
-const ENCODED_WORD = /=\?([^?]+)\?[BQ]\?[^?]*\?=/i;
-
 function mailpitUrl(context) {
     expect(context.mailpitUrl, 'Mailpit url (use step: I setup mailpit with url "...")').to.be.a('string').and.not.be.empty;
     return context.mailpitUrl;
 }
 
-function searchQuery(recipient, subject) {
-    return subject ? `to:"${recipient}" subject:"${subject}"` : `to:"${recipient}"`;
-}
-
-// Mailpit "to:" search is a substring match ("jane@x.fr" also matches "mary-jane@x.fr"),
-// so results are narrowed down to the exact recipient. Messages come newest first.
 function searchMails(context, recipient, subject) {
     return cy.request({
         method: 'GET',
         url: `${mailpitUrl(context)}/api/v1/search`,
         qs: {query: searchQuery(recipient, subject), limit: 200},
-    }).then((response) => response.body.messages.filter((message) =>
-        message.To.some((to) => to.Address.toLowerCase() === recipient.toLowerCase())
-    ));
+    }).then((response) => filterRecipient(response.body.messages, recipient));
 }
 
 function waitForMail(context, recipient, subject, attempt = 1) {
@@ -58,7 +50,7 @@ function waitForMail(context, recipient, subject, attempt = 1) {
             return messages[0];
         }
         if (attempt >= MAIL_POLL_ATTEMPTS) {
-            throw new Error(`No mail sent to ${recipient}${subject ? ` with subject "${subject}"` : ''} found in Mailpit after ${MAIL_POLL_ATTEMPTS} attempts`);
+            throw noMailError(recipient, subject);
         }
         return cy.wait(MAIL_POLL_INTERVAL_MS).then(() => waitForMail(context, recipient, subject, attempt + 1));
     });
@@ -84,37 +76,11 @@ function fetchLastMail(templatedRecipient, templatedSubject) {
     });
 }
 
-function binaryStringToBytes(binary) {
-    return Uint8Array.from(binary, (c) => c.charCodeAt(0));
-}
-
-function rawHeaderBlock(raw) {
-    const end = raw.search(/\r?\n\r?\n/);
-    return end === -1 ? raw : raw.slice(0, end);
-}
-
-function rawHeader(headerBlock, name) {
-    // Unfold continuation lines before matching (RFC 5322 §2.2.3).
-    const unfolded = headerBlock.replace(/\r?\n[ \t]+/g, ' ');
-    const match = unfolded.match(new RegExp(`^${name}:\\s*(.*)$`, 'im'));
-    return match ? match[1] : null;
-}
-
 function expectCleanText(label, value) {
     const text = value || '';
     expect(REPLACEMENT_CHAR.test(text), `${label} contains U+FFFD (invalid UTF-8 bytes): ${text}`).to.be.false;
     expect(MOJIBAKE.test(text), `${label} contains mojibake (UTF-8 read as Latin-1): ${text.match(MOJIBAKE)?.[0]}`).to.be.false;
     expect(C1_CONTROLS.test(text), `${label} contains C1 control characters (UTF-8 read as Latin-1)`).to.be.false;
-}
-
-// Visible text of the HTML part: tags dropped, entities decoded, whitespace collapsed.
-function htmlToText(html) {
-    return he.decode((html || '').replace(/<(script|style)[\s\S]*?<\/\1>/gi, ' ').replace(/<[^>]+>/g, ' '))
-        .replace(/\s+/g, ' ');
-}
-
-function extractLinks(html) {
-    return [...(html || '').matchAll(/href\s*=\s*["']([^"']+)["']/gi)].map((m) => he.decode(m[1]));
 }
 
 Given('I setup mailpit with url {string}', (templatedUrl) => {

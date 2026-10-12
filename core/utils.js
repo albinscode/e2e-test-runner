@@ -43,3 +43,28 @@ export function getDataTable(context, dataTable) {
 
     return result;
 }
+// Decodes a base64 string holding UTF-8 bytes (atob alone returns one char per byte).
+export function decodeBase64(base64) {
+    return new TextDecoder().decode(Uint8Array.from(atob(base64), (c) => c.charCodeAt(0)));
+}
+
+export function decodeBase64Json(base64) {
+    return JSON.parse(decodeBase64(base64));
+}
+
+// Payload of a JWT token (base64url encoded).
+export function decodeJwtPayload(jwt) {
+    return decodeBase64Json(jwt.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'));
+}
+
+// Kafka message (JSON string) whose base64 `payload` holds a header with the given correlation id.
+export function findMessageByCorrelationId(messages, correlationId) {
+    return messages.find((msg) => {
+        try {
+            const decoded = decodeBase64Json(JSON.parse(msg).payload);
+            return decoded.header && decoded.header.correlation_id === correlationId;
+        } catch (_) {
+            return false;
+        }
+    });
+}

@@ -22,3 +22,17 @@ Feature: Database steps
     When I execute sql request "SELECT 1 AS one"
     Then I expect 1 database results
     And I expect "{{ ctx.dbResults[0].one }}" is "1"
+
+  Scenario: Add, search and delete table rows
+    Given I setup database with connection string "postgres://{{ env.DB_USER }}:{{ env.DB_PASSWORD }}@{{ env.DB_HOST }}:55432/{{ env.DB_NAME }}"
+    When I execute sql request "CREATE TABLE IF NOT EXISTS e2e_rows (name TEXT, age INTEGER)"
+    And I execute sql request "DELETE FROM e2e_rows"
+    And I add a row to table "e2e_rows" with values:
+      """
+      {"name": "John", "age": 30}
+      """
+    And I search db table "e2e_rows" with filter "name = 'John'" and columns "name age"
+    Then I expect 1 db results
+    When I delete all db results
+    And I search db table "e2e_rows" with filter "name = 'John'" and columns "name"
+    Then I expect 0 db results

@@ -25,6 +25,7 @@ const DEFAULT_ENV = {
     LDAP_BIND_DN: 'cn=admin,dc=example,dc=org',
     LDAP_PASSWORD: 'admin',
     LDAP_BASE_DN: 'dc=example,dc=org',
+    MAILPIT_URL: 'http://localhost:58025',
 };
 
 async function main() {

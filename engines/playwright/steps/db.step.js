@@ -34,3 +34,30 @@ When('I execute sql request {string} with values:', async ({ db, world }, templa
 Then('I expect {int} database results', async ({ db }, expected) => {
     expect(db.getDbResults().length).toBe(expected);
 });
+
+Given('I setup database with connection string {string}', async ({ db, world }, templatedConnectionString) => {
+    await db.initDb({ connectionString: render(templatedConnectionString, world) });
+});
+
+When('I search db table {string} with filter {string} and columns {string}', async ({ db, world }, templatedTable, templatedFilter, templatedColumns) => {
+    await db.runDbSearch({
+        table: render(templatedTable, world),
+        filter: render(templatedFilter, world),
+        columns: render(templatedColumns, world),
+    });
+});
+
+When('I add a row to table {string} with values:', async ({ db, world }, templatedTableName, rowJson) => {
+    await db.addTableRow({
+        tableName: render(templatedTableName, world),
+        rowData: JSON.parse(rowJson),
+    });
+});
+
+Then('I expect {int} db results', async ({ db }, expected) => {
+    expect(db.getDbResults().length).toBe(expected);
+});
+
+Then('I delete all db results', async ({ db }) => {
+    await db.deleteDbResults();
+});

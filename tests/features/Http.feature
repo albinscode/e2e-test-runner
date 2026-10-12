@@ -42,3 +42,22 @@ Feature: HTTP steps
     When I request "{{ env.API_URL }}/echo?first=1&second=2" with method "GET"
     Then I expect "{{ response.body.query.second }}" is "2"
     And I expect http header "x-request-id" is "e2e-request-id"
+
+  Scenario: Request without cookies
+    Given I set http header "Content-Type" with "application/json"
+    When I request "{{ env.API_URL }}/echo" with method "POST" without cookies with body:
+      """
+      {"name": "Alice"}
+      """
+    Then I expect status code is 200
+    And I expect "{{ response.body.method }}" is "POST"
+    And I expect "{{ response.body.body }}" is "{\"name\": \"Alice\"}" as "json"
+    And I expect "{{ response.body.headers.cookie }}" is empty
+
+  Scenario: Decode base64 and JWT payloads
+    When I decode base64 string "eyJuYW1lIjoiSMOpbMOobmUiLCJhZ2UiOjMwfQ==" and store it as JSON "decoded" in context
+    Then I expect "{{ ctx.decoded.name }}" is "Hélène"
+    And I expect "{{ ctx.decoded.age }}" is "30"
+    When I decode JWT token "eyJhbGciOiJub25lIn0.eyJzdWIiOiJqb2huIiwibmFtZSI6IkjDqWzDqG5lIn0.signature" and store it as JSON "jwt" in context
+    Then I expect "{{ ctx.jwt.sub }}" is "john"
+    And I expect "{{ ctx.jwt.name }}" is "Hélène"
